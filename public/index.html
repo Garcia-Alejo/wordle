@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordle</title>
+    <link rel="stylesheet" href="styleasd.css">
+</head>
+<body>
+    <h1>Juego estilo Wordle</h1>
+    <div id="messages"></div>
+    
+    <div id="wordInput" class="hidden">
+        <label for="word">Ingresa tu palabra secreta:</label>
+        <input type="text" id="word" maxlength="5" />
+        <button id="setWordBtn">Enviar Palabra Secreta</button>
+    </div>
+
+    <div id="guessInput" class="hidden">
+        <label for="guess">Adivina la palabra:</label>
+        <input type="text" id="guess" maxlength="5" />
+        <button id="submitGuessBtn">Enviar intento</button>
+    </div>
+
+    <!-- Cargar el archivo de Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Cargar el archivo client.js que contiene la lógica del cliente -->
+    <script src="client.js"></script>
+</body>
+</html>
