@@ -3,28 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wordle</title>
-    <link rel="stylesheet" href="styleasd.css">
+    <title>Juego Wordle</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js" defer></script>
+    <style>
+        .correct {
+            color: green;
+            font-weight: bold;
+        }
+        .incorrect {
+            color: red;
+            font-weight: bold;
+        }
+        .wrong-position {
+            color: orange;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-    <h1>Juego estilo Wordle</h1>
-    <div id="messages"></div>
-    
-    <div id="wordInput" class="hidden">
-        <label for="word">Ingresa tu palabra secreta:</label>
-        <input type="text" id="word" maxlength="5" />
-        <button id="setWordBtn">Enviar Palabra Secreta</button>
+    <h1>Juego Wordle</h1>
+    <div id="gameStatus"></div>
+
+    <!-- Pantalla para que el Jugador ingrese su palabra secreta -->
+    <div id="setWordDiv">
+        <label for="playerWord">Ingresa tu palabra secreta:</label>
+        <input type="text" id="playerWord" placeholder="Palabra secreta">
+        <button onclick="setWord()">Establecer palabra</button>
     </div>
 
-    <div id="guessInput" class="hidden">
-        <label for="guess">Adivina la palabra:</label>
-        <input type="text" id="guess" maxlength="5" />
-        <button id="submitGuessBtn">Enviar intento</button>
+    <!-- Pantalla para adivinar la palabra del otro jugador -->
+    <div id="guessWordDiv" style="display:none;">
+        <label for="guessWord">Adivina la palabra del otro jugador:</label>
+        <input type="text" id="guessWord" placeholder="Adivina palabra">
+        <button onclick="guessWord()">Adivinar</button>
     </div>
 
-    <!-- Cargar el archivo de Socket.IO -->
-    <script src="/socket.io/socket.io.js"></script>
-    <!-- Cargar el archivo client.js que contiene la lógica del cliente -->
-    <script src="client.js"></script>
+    <h2 id="result"></h2>
+    <div id="feedback"></div>
 </body>
 </html>
+

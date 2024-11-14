@@ -6,109 +6,125 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-const PORT = process.env.PORT || 3000;
-const MAX_TRIES = 6;
-
-let players = [];
-let gameState = {
-  player1Word: '',
-  player2Word: '',
-  currentTurn: 1,
-  attempts: 0,
-  maxTries: MAX_TRIES
+let gameData = {
+    player1Socket: null,
+    player2Socket: null,
+    player1: { word: '', guess: '' },
+    player2: { word: '', guess: '' },
+    gameStarted: false,
 };
 
-// Servir los archivos estáticos desde la carpeta 'public'
+// Servir los archivos estáticos (frontend)
 app.use(express.static('public'));
 
-// Configurar las conexiones de los jugadores
+// Conectar jugadores y gestionar el flujo del juego
 io.on('connection', (socket) => {
-  console.log('Un jugador se ha conectado:', socket.id);
+    console.log('Nuevo jugador conectado: ' + socket.id);
 
-  if (players.length < 2) {
-    players.push(socket.id);
-    socket.emit('message', 'Esperando al segundo jugador...');
-  }
-
-  if (players.length === 2) {
-    io.emit('message', 'Ambos jugadores están conectados, ¡el juego puede comenzar!');
-  }
-
-  // Recibir la palabra secreta del jugador
-  socket.on('setWord', (word) => {
-    if (socket.id === players[0]) {
-      gameState.player1Word = word;
-      socket.emit('message', 'Palabra secreta de Jugador 1 recibida. Esperando a Jugador 2...');
-    } else if (socket.id === players[1]) {
-      gameState.player2Word = word;
-      socket.emit('message', 'Palabra secreta de Jugador 2 recibida. El juego puede comenzar.');
+    // Si no hay jugador 1, asignar al jugador 1
+    if (!gameData.player1Socket) {
+        gameData.player1Socket = socket;
+        socket.emit('playerRole', 'Jugador 1, por favor ingresa tu palabra secreta.');
+    }
+    // Si ya existe jugador 1 y no hay jugador 2, asignar al jugador 2
+    else if (!gameData.player2Socket) {
+        gameData.player2Socket = socket;
+        socket.emit('playerRole', 'Jugador 2, por favor ingresa tu palabra secreta.');
+        io.emit('gameStarted', '¡El juego ha comenzado! Ambos jugadores pueden comenzar.');
+        gameData.gameStarted = true;
+    }
+    // Si ambos jugadores ya están conectados, los nuevos jugadores deben esperar
+    else {
+        socket.emit('waitingForOtherPlayer', 'Esperando que el otro jugador ingrese su palabra...');
     }
 
-    if (gameState.player1Word && gameState.player2Word) {
-      io.emit('gameStart');
+    // Establecer la palabra secreta
+    socket.on('setWord', (data) => {
+        if (socket === gameData.player1Socket) {
+            gameData.player1.word = data.word;
+            socket.emit('wordSet', 'Tu palabra secreta fue establecida, espera al Jugador 2.');
+            gameData.player2Socket.emit('waitingForWord', 'Jugador 2, por favor ingresa tu palabra secreta.');
+        } else if (socket === gameData.player2Socket) {
+            gameData.player2.word = data.word;
+            socket.emit('wordSet', 'Tu palabra secreta fue establecida, espera al Jugador 1 para adivinar.');
+        }
+    });
+
+    // Adivinar la palabra
+    socket.on('guessWord', (data) => {
+        if (socket === gameData.player1Socket) {
+            gameData.player1.guess = data.guess;
+            const feedback = getFeedback(gameData.player1.guess, gameData.player2.word);
+            io.emit('guessResult', {
+                player: 'Jugador 1',
+                guess: data.guess,
+                feedback: feedback
+            });
+
+            // Si el jugador 1 adivina correctamente
+            if (gameData.player1.guess === gameData.player2.word) {
+                io.emit('gameOver', '¡Jugador 1 ganó!');
+                gameData.gameStarted = false; // Terminar el juego
+                return;
+            }
+        } else if (socket === gameData.player2Socket) {
+            gameData.player2.guess = data.guess;
+            const feedback = getFeedback(gameData.player2.guess, gameData.player1.word);
+            io.emit('guessResult', {
+                player: 'Jugador 2',
+                guess: data.guess,
+                feedback: feedback
+            });
+
+            // Si el jugador 2 adivina correctamente
+            if (gameData.player2.guess === gameData.player1.word) {
+                io.emit('gameOver', '¡Jugador 2 ganó!');
+                gameData.gameStarted = false; // Terminar el juego
+                return;
+            }
+        }
+    });
+
+    // Comprobar si la adivinanza es correcta
+    function getFeedback(guess, word) {
+        let feedback = '';
+        let tempWord = word.split('');
+        let tempGuess = guess.split('');
+        
+        // Verificar letras correctas en la posición correcta
+        for (let i = 0; i < guess.length; i++) {
+            if (tempGuess[i] === tempWord[i]) {
+                feedback += `<span class="correct">${tempGuess[i]}</span>`;  // Correctas
+                tempWord[i] = null;  // Marcar como ya procesada
+                tempGuess[i] = null;
+            } else {
+                feedback += `<span class="incorrect">${tempGuess[i]}</span>`;  // Incorrectas
+            }
+        }
+
+        // Verificar letras incorrectas que están en la palabra, pero no en la posición correcta
+        for (let i = 0; i < guess.length; i++) {
+            if (tempGuess[i] !== null && tempWord.includes(tempGuess[i])) {
+                feedback = feedback.substring(0, i * 23) + `<span class="wrong-position">${tempGuess[i]}</span>` + feedback.substring((i + 1) * 23);
+                tempWord[tempWord.indexOf(tempGuess[i])] = null;  // Marcar como procesada
+            }
+        }
+
+        return feedback;
     }
-  });
 
-  // Recibir un intento de adivinanza
-  socket.on('guess', (guess) => {
-    const currentPlayer = gameState.currentTurn === 1 ? players[0] : players[1];
-    const secretWord = gameState.currentTurn === 1 ? gameState.player2Word : gameState.player1Word;
-    const opponent = gameState.currentTurn === 1 ? players[1] : players[0];
-
-    const feedback = checkGuess(secretWord, guess);
-
-    io.to(currentPlayer).emit('guessResult', { guess, feedback });
-
-    if (guess === secretWord) {
-      io.to(currentPlayer).emit('message', '¡Adivinaste correctamente! Has ganado.');
-      io.to(opponent).emit('message', 'El jugador ha adivinado tu palabra. Has perdido.');
-      resetGame();
-    } else {
-      gameState.attempts++;
-
-      if (gameState.attempts >= gameState.maxTries) {
-        io.to(currentPlayer).emit('message', `Has agotado tus intentos. La palabra era: ${secretWord}`);
-        io.to(opponent).emit('message', `¡El juego ha terminado! La palabra era: ${secretWord}`);
-        resetGame();
-      }
-
-      gameState.currentTurn = gameState.currentTurn === 1 ? 2 : 1;
-      io.emit('turnChange', gameState.currentTurn);
-    }
-  });
-
-  // Si un jugador se desconecta
-  socket.on('disconnect', () => {
-    console.log('Un jugador se ha desconectado:', socket.id);
-    players = players.filter(player => player !== socket.id);
-  });
+    // Desconectar jugador
+    socket.on('disconnect', () => {
+        console.log('Jugador desconectado: ' + socket.id);
+        if (socket === gameData.player1Socket) {
+            gameData.player1Socket = null;
+        } else if (socket === gameData.player2Socket) {
+            gameData.player2Socket = null;
+        }
+    });
 });
 
 // Iniciar el servidor
-server.listen(PORT, () => {
-  console.log(`Servidor iniciado en http://localhost:${PORT}`);
+server.listen(3000, () => {
+    console.log('Servidor escuchando en http://localhost:3000');
 });
-
-// Función para comprobar los intentos
-function checkGuess(secretWord, guess) {
-  let correctLetters = 0;
-  for (let i = 0; i < secretWord.length; i++) {
-    if (secretWord[i] === guess[i]) {
-      correctLetters++;
-    }
-  }
-  return `${correctLetters} letras correctas`;
-}
-
-// Función para resetear el juego
-function resetGame() {
-  gameState = {
-    player1Word: '',
-    player2Word: '',
-    currentTurn: 1,
-    attempts: 0,
-    maxTries: MAX_TRIES
-  };
-  players = [];
-  io.emit('gameOver');
-}
