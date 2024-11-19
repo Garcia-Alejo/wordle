@@ -81,7 +81,9 @@ function addToHistory(guess, feedback) {
 document.getElementById('restart-game').addEventListener('click', () => {
     socket.emit('restart_game');
     document.getElementById('restart-game').classList.add('d-none'); // Ocultar botón reiniciar
+    document.getElementById('game-end').classList.add('d-none'); // Ocultar la sección del final del juego
 });
+
 
 // Desconectar juego
 document.getElementById('disconnect-game').addEventListener('click', () => {
@@ -90,17 +92,16 @@ document.getElementById('disconnect-game').addEventListener('click', () => {
 });
 
 // Este código mostrará el mensaje del ganador y los botones de reinicio/desconexión
-socket.on('game-over', (message) => {
-    socket.on('game-over', (data) => {
-        const { winner, message } = data;
-        // Mostrar el mensaje de quien ha ganado
-        document.getElementById('game-end').classList.remove('d-none');
-        document.getElementById('end-message').textContent = message; // Muestra quién ha ganado
-    
-        // Adaptar para mostrar el ganador en negrita
-        const winnerElement = document.getElementById('end-message');
-        winnerElement.innerHTML = `<b>${message}</b>`; // Enfatiza el ganador
-    });
+socket.on('game-over', (data) => {
+    const { winner, message } = data; // Extraer ganador y mensaje del objeto
+
+    // Mostrar el mensaje de quien ha ganado
+    document.getElementById('game-end').classList.remove('d-none');
+    document.getElementById('end-message').textContent = message; // Muestra quién ha ganado
+
+    // Adaptar para mostrar el ganador en negrita
+    const winnerElement = document.getElementById('end-message');
+    winnerElement.innerHTML = `<b>${message}</b>`; // Enfatiza el ganador
 
     // Deshabilitar las entradas y botones relacionados al juego
     document.getElementById('word-input').disabled = true;
